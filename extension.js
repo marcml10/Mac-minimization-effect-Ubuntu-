@@ -127,41 +127,44 @@ export default class CompizMagicLampEffectExtension extends Extension {
     }
 
     getIcon(actor) {
-        let [success, icon] = actor.meta_window.get_icon_geometry();
-        if (success) {
+        const [success, icon] = actor.meta_window.get_icon_geometry();
+        if (success && icon)
             return icon;
-        } 
-    
-        let monitor = Main.layoutManager.monitors[actor.meta_window.get_monitor()];
-        if (monitor && Main.overview.dash) {
-            Main.overview.dash._redisplay();  
 
-            let dashIcon = null;
-            let transformed_position = null;
-            let pids = null;
-            let pid = actor.get_meta_window() ? actor.get_meta_window().get_pid() : null;
-            if (pid) {
-                Main.overview.dash._box.get_children()
-                    .filter(dashElement => dashElement.child && dashElement.child._delegate && dashElement.child._delegate.app)
-                    .forEach(dashElement => {
-                        pids = dashElement.child._delegate.app.get_pids();
-                        if (pids && pids.indexOf(pid) >= 0) {
-                            transformed_position = dashElement.get_transformed_position();
-                            if (transformed_position && transformed_position[0]) {
-                                dashIcon = {x: transformed_position[0], y: monitor.y + monitor.height, width: 0, height: 0};
-                                return;
-                            }
-                        }
-                    });
-            }
-            if (dashIcon) {
-                return dashIcon;
-            }
+        const monitor = Main.layoutManager.monitors[actor.meta_window.get_monitor()];
+        if (!monitor)
+            return {x: 0, y: 0, width: 0, height: 0};
 
-            return {x: monitor.x + monitor.width / 2, y: monitor.y + monitor.height, width: 0, height: 0};
+        // Search existing overview Dash items without forcing a redisplay.
+        const dash = Main.overview.dash;
+        const pid = actor.meta_window.get_pid();
+        const items = dash?._box?.get_children() ?? [];
+
+        for (const item of items) {
+            const app = item.child?._delegate?.app;
+            if (!app)
+                continue;
+
+            const pids = app.get_pids();
+            if (!pids?.includes(pid))
+                continue;
+
+            const [x] = item.get_transformed_position();
+            return {
+                x,
+                y: monitor.y + monitor.height,
+                width: 0,
+                height: 0,
+            };
         }
 
-        return {x: 0, y: 0, width: 0, height: 0};    
+        // No app icon geometry or matching Dash item: use the monitor edge.
+        return {
+            x: monitor.x + monitor.width / 2,
+            y: monitor.y + monitor.height,
+            width: 0,
+            height: 0,
+        };
     }
 
     destroyActorEffect(actor) {
@@ -353,7 +356,7 @@ class AbstractCommonMagicLampEffect extends Clutter.DeformEffect {
                 if (this.EFFECT === 'sine') {
                     this.effectY = Math.sin(this.x / this.width * Math.PI * 4) * this.window.height / 14 * this.k;
                 } else {
-                    this.effectY = Math.sin((0.5 - (this.width - this.x) / this.width) * 2 * Math.PI) * (this.window.y + this.window.height * v.ty - (this.icon.y + this.icon.height * v.ty)) / 7 * this.k;
+                    this.effectY = Math.sin((0.5 - (this.width - this.x) / this.width) * 2 * Math.PI) * (this.window.y + this.window.height * v.ty - (this.icon.y + this.icon.height * v.ty)) / 14 * this.k;
                 }
             } else if (this.iconPosition == St.Side.TOP) {
                 this.height = this.window.height - this.icon.height + this.window.y * this.k;
@@ -368,7 +371,7 @@ class AbstractCommonMagicLampEffect extends Clutter.DeformEffect {
                 if (this.EFFECT === 'sine') {
                     this.effectX = Math.sin(this.y / this.height * Math.PI * 4) * this.window.width / 14 * this.k;
                 } else {
-                    this.effectX = Math.sin((0.5 - (this.height - this.y) / this.height) * 2 * Math.PI) * (this.window.x + this.window.width * v.tx - (this.icon.x + this.icon.width * v.tx)) / 7 * this.k;
+                    this.effectX = Math.sin((0.5 - (this.height - this.y) / this.height) * 2 * Math.PI) * (this.window.x + this.window.width * v.tx - (this.icon.x + this.icon.width * v.tx)) / 14 * this.k;
                 }
             } else if (this.iconPosition == St.Side.RIGHT) {
                 this.expandWidth = (this.iconMonitor.width - this.icon.width - this.window.x - this.window.width);
@@ -386,7 +389,7 @@ class AbstractCommonMagicLampEffect extends Clutter.DeformEffect {
                 if (this.EFFECT === 'sine') {
                     this.effectY = Math.sin((this.width - this.x) / this.fullWidth * Math.PI * 4) * this.window.height / 14 * this.k;
                 } else {
-                    this.effectY = Math.sin(((this.width - this.x) / this.fullWidth) * 2 * Math.PI + Math.PI) * (this.window.y + this.window.height * v.ty - (this.icon.y + this.icon.height * v.ty)) / 7 * this.k;
+                    this.effectY = Math.sin(((this.width - this.x) / this.fullWidth) * 2 * Math.PI + Math.PI) * (this.window.y + this.window.height * v.ty - (this.icon.y + this.icon.height * v.ty)) / 14 * this.k;
                 }
             } else if (this.iconPosition == St.Side.BOTTOM) {
                 this.expandHeight = (this.iconMonitor.height - this.icon.height - this.window.y - this.window.height);
@@ -404,7 +407,7 @@ class AbstractCommonMagicLampEffect extends Clutter.DeformEffect {
                 if (this.EFFECT === 'sine') {
                     this.effectX = Math.sin((this.height - this.y) / this.fullHeight * Math.PI * 4) * this.window.width / 14 * this.k;
                 } else {
-                    this.effectX = Math.sin(((this.height - this.y) / this.fullHeight) * 2 * Math.PI + Math.PI) * (this.window.x + this.window.width * v.tx - (this.icon.x + this.icon.width * v.tx)) / 7 * this.k;
+                    this.effectX = Math.sin(((this.height - this.y) / this.fullHeight) * 2 * Math.PI + Math.PI) * (this.window.x + this.window.width * v.tx - (this.icon.x + this.icon.width * v.tx)) / 14 * this.k;
                 }
             }
             
